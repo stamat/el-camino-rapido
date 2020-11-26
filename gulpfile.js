@@ -17,14 +17,18 @@ const rollup_commonjs      = require('@rollup/plugin-commonjs');
 const rollup_resolve       = require('@rollup/plugin-node-resolve');
 const rollup_terser        = require('rollup-plugin-terser');
 const jshint               = require('gulp-jshint');
+const yaml                 = require('js-yaml');
+const fs                   = require('fs');
+const data                 = require('gulp-data');
 
 // ### nunjucks
 gulp.task('render_markup', function () {
-  return gulp.src('./_markup/*.+(html|nunjucks)')
+  return gulp.src(['./_markup/**/*.+(html|nunjucks)', '!./_markup/_layouts/*.+(html|nunjucks)', '!./_markup/_partials/*.+(html|nunjucks)'])
+    .pipe(data(yaml.safeLoad(fs.readFileSync('./_data/content.yml', 'utf8'))))
     .pipe(nunjucks({
-        path: ['./_markup/layouts', './_markup/partials']
+        path: ['./_markup/_layouts', './_markup/_partials']
       }))
-    .pipe(gulp.dest('./'))
+    .pipe(gulp.dest('./_site'))
     .pipe(connect.reload());
 });
 
@@ -53,13 +57,13 @@ gulp.task('rollup', async function () {
   });
 
   let opts = {
-    file: './assets/js/bundle.js',
+    file: './_site/assets/js/bundle.js',
     format: 'iife',
     sourcemap: false
   };
 
   if (argv.production) {
-    opts.file = './assets/js/bundle.min.js';
+    opts.file = './_site/assets/js/bundle.min.js';
   }
 
   if (argv.sourcemap) {
@@ -84,7 +88,7 @@ gulp.task('sass', function () {
   }
 */
 
-  return gulp.src(['./_sass/style.scss'])
+  return gulp.src(['./_sass/main.scss'])
     .pipe(sass(opts).on('error', sass.logError))
     .pipe(autoprefixer(
       [
@@ -100,8 +104,9 @@ gulp.task('sass', function () {
     .pipe(gulpif(argv.sourcemap, sourcemaps.init()))
     .pipe(gulpif(argv.production, cleanCSS()))
     .pipe(gulpif(argv.sourcemap, sourcemaps.write()))
+    .pipe(rename({ basename: 'style' }))
     .pipe(gulpif(argv.production, rename({suffix: '.min'})))
-    .pipe(gulp.dest('./assets/css'))
+    .pipe(gulp.dest('./_site/assets/css'))
     .pipe(connect.reload());
 });
 
@@ -110,7 +115,7 @@ gulp.task('sass', function () {
 gulp.task('jshint', function() {
   return gulp.src(['./_scripts/**/*.js'])
     .pipe(jshint({
-      "esversion": 6
+      "esversion": 10
     }))
     .pipe(jshint.reporter('jshint-stylish'))
     .pipe(connect.reload());
@@ -118,16 +123,17 @@ gulp.task('jshint', function() {
 
 gulp.task('reload', function () {
   return gulp.src([
-    '*.html',
-    './assets/**/*.png',
-    './assets/**/*.jpg',
-    './assets/**/*.jpeg',
-    './assets/**/*.svg'])
+    './_site/**/*.html',
+    './_site/assets/**/*.png',
+    './_site/assets/**/*.jpg',
+    './_site/assets/**/*.jpeg',
+    './_site/assets/**/*.svg'])
     .pipe(connect.reload());
 });
 
-gulp.task('serve', async function () {
+gulp.task('server', async function () {
   connect.server({
+    root: '_site',
     port: 4040,
     livereload: true
   });
@@ -138,10 +144,10 @@ gulp.task('watch', async function () {
   gulp.watch(['./_scripts/**/*.ts', './_scripts/**/*.js'], gulp.series('jshint', 'rollup'));
   gulp.watch(['./_markup/**/*.+(html|nunjucks)'], gulp.series('render_markup'));
   gulp.watch([
-    './assets/**/*.png',
-    './assets/**/*.jpg',
-    './assets/**/*.jpeg',
-    './assets/**/*.svg'
+    './_site/assets/**/*.png',
+    './_site/assets/**/*.jpg',
+    './_site/assets/**/*.jpeg',
+    './_site/assets/**/*.svg'
   ], gulp.series('reload'));
 });
 
@@ -149,5 +155,8 @@ gulp.task('watch', async function () {
 // `gulp build`
 gulp.task('build', gulp.series('render_markup', 'rollup','sass'));
 
-// `gulp`
-gulp.task('default', gulp.series('render_markup', 'jshint', 'rollup', 'sass', 'serve', 'watch'));
+// ### Serve
+// `gulp serve`
+gulp.task('serve', gulp.series('render_markup', 'jshint', 'rollup', 'sass', 'server', 'watch'));
+
+gulp.task('default', gulp.series('serve'));

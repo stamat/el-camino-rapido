@@ -1,7 +1,7 @@
 const greeting = 'Hey there! 👋';
 
-let greet = () => {
+let greet = (greeting) => {
   console.log(greeting);
 };
 
-greet();
+greet(greeting);
